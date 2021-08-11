@@ -1,6 +1,6 @@
 name: CI
-env:
-    # TZ: Asia/Shanghai
+# env:
+#     TZ: Asia/Shanghai
 on:
   push:
     branches:
