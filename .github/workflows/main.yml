@@ -10,20 +10,20 @@ on:
     paths-ignore:
       - '.github/workflows/*'
       - '!.github/workflows/*main.yml'
-  pull_request:
-    branches:
-      - master
-    paths-ignore:
-      - '.github/workflows/*'
-      - '!.github/workflows/*main.yml'
-  workflow_dispatch:
-    inputs:
-      logLevel:
-        description: 'Log level'     
-        required: true
-        default: 'warning'
-      tags:
-        description: 'Test scenario tags'  
+  # pull_request:
+  #   branches:
+  #     - master
+  #   paths-ignore:
+  #     - '.github/workflows/*'
+  #     - '!.github/workflows/*main.yml'
+  # workflow_dispatch:
+  #   inputs:
+  #     logLevel:
+  #       description: 'Log level'     
+  #       required: true
+  #       default: 'warning'
+  #     tags:
+  #       description: 'Test scenario tags'  
 jobs:
   build_env:
     name: build env
@@ -46,176 +46,176 @@ jobs:
           path: ./.custom_env
     - name: clean custom env
       run: rm .custom_env
-  build_web:
-    needs: [build_env]
-    name: Build Flutter (Web)
-    runs-on: ubuntu-latest
-    steps:
-    - name: download custom env
-      uses: actions/download-artifact@v2
-      with:
-          name: custom_env
-    - name: apply custom env
-      run: |
-          cat .custom_env >> $GITHUB_ENV
-          rm .custom_env
-    - uses: actions/checkout@v2
-    - uses: subosito/flutter-action@v1
-      with:
-          channel: 'stable'
-    - run: |
-          flutter pub get
-          flutter build web
-          cd build/web
-          zip -r ../$BUILD_NAME_WITH_VERSION-web.zip * .[^.]*
-          cd ../../
-    - name: Archive Production Artifact
-      uses: actions/upload-artifact@master
-      with:
-        name: web-build
-        path: build/${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
-  build_ios:
-    needs: [build_env]
-    name: Build Flutter (iOS)
-    runs-on: macOS-latest
-    steps:
-    - name: download custom env
-      uses: actions/download-artifact@v2
-      with:
-          name: custom_env
-    - name: apply custom env
-      run: |
-          cat .custom_env >> $GITHUB_ENV
-          rm .custom_env
-    - uses: actions/checkout@v2
-    # - uses: actions/setup-java@v1
-    #   with:
-    #     java-version: '12.x'
-    - uses: subosito/flutter-action@v1
-      with:
-          channel: 'stable'
-    - run: |
-          flutter pub get
-          flutter clean
-          flutter build ios --release --no-codesign
-    - name: build ios ipa
-      run: |
-          cd build/ios/iphoneos
-          mkdir Payload
-          cd Payload
-          ln -s ../Runner.app
-          cd ..
-          zip -r $BUILD_NAME_WITH_VERSION-ios.ipa Payload
-    - name: Upload iPA
-      uses: actions/upload-artifact@master
-      with:
-        name: ios-build
-        path: build/ios/iphoneos/${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
-  build_android:
-    needs: [build_env]
-    name: Build Flutter (Android)
-    runs-on: ubuntu-latest
-    steps:
-    - name: download custom env
-      uses: actions/download-artifact@v2
-      with:
-          name: custom_env
-    - name: apply custom env
-      run: |
-          cat .custom_env >> $GITHUB_ENV
-          rm .custom_env
-    - uses: actions/checkout@v2
-    - uses: actions/setup-java@v1
-      with:
-        java-version: '12.x'
-    - uses: subosito/flutter-action@v1
-      with:
-          channel: 'stable'
-    - run: flutter pub get
-    - name: sign config
-      env:
-        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-      if: ${{ env.SIGNING_KEY != '' }}
-      run: |
-          cd android/
-          echo "${{ secrets.SIGNING_KEY }}" |base64 -d > signing.jks
-          echo "${{ secrets.KEY_PROPERTIES }}" > key.properties
-          echo storeFile=signing.jks >> key.properties
-    - run: |
-          flutter build apk --target-platform android-arm64
-          find build/app/outputs/
-          mv build/app/outputs/apk/release/*.apk build/$BUILD_NAME_WITH_VERSION-android.apk
-    - name: Upload APK
-      uses: actions/upload-artifact@master
-      with:
-        name: android-build
-        path: build/${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
-  release:
-    needs: [build_env, build_web, build_ios, build_android]
-    name: make release
-    runs-on: ubuntu-latest
-    steps:
-    - name: download custom env
-      uses: actions/download-artifact@v2
-      with:
-          name: custom_env
-    - name: apply custom env
-      run: |
-          cat .custom_env >> $GITHUB_ENV
-          rm .custom_env
-    - name: download web
-      uses: actions/download-artifact@v2
-      with:
-          name: web-build
-    - name: download ios
-      uses: actions/download-artifact@v2
-      with:
-          name: ios-build
-    - name: download android
-      uses: actions/download-artifact@v2
-      with:
-          name: android-build
-    - name: create release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.BUILD_VERSION }}
-        release_name: ${{ env.BUILD_VERSION }}
-        body: ${{ github.event.commits[0].message }}
-        draft: true
-        prerelease: false
-    - name: Upload Release Asset web
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
-        asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
-        asset_content_type: application/zip
-    - name: Upload Release Asset ios
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
-        asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
-        asset_content_type: application/zip
-    - name: Upload Release Asset android
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
-        asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
-        asset_content_type: application/zip
-    - name: public release
-      uses: eregon/publish-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        release_id: ${{ steps.create_release.outputs.id }}
+  # build_web:
+  #   needs: [build_env]
+  #   name: Build Flutter (Web)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: download custom env
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: custom_env
+  #   - name: apply custom env
+  #     run: |
+  #         cat .custom_env >> $GITHUB_ENV
+  #         rm .custom_env
+  #   - uses: actions/checkout@v2
+  #   - uses: subosito/flutter-action@v1
+  #     with:
+  #         channel: 'stable'
+  #   - run: |
+  #         flutter pub get
+  #         flutter build web
+  #         cd build/web
+  #         zip -r ../$BUILD_NAME_WITH_VERSION-web.zip * .[^.]*
+  #         cd ../../
+  #   - name: Archive Production Artifact
+  #     uses: actions/upload-artifact@master
+  #     with:
+  #       name: web-build
+  #       path: build/${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
+  # build_ios:
+  #   needs: [build_env]
+  #   name: Build Flutter (iOS)
+  #   runs-on: macOS-latest
+  #   steps:
+  #   - name: download custom env
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: custom_env
+  #   - name: apply custom env
+  #     run: |
+  #         cat .custom_env >> $GITHUB_ENV
+  #         rm .custom_env
+  #   - uses: actions/checkout@v2
+  #   # - uses: actions/setup-java@v1
+  #   #   with:
+  #   #     java-version: '12.x'
+  #   - uses: subosito/flutter-action@v1
+  #     with:
+  #         channel: 'stable'
+  #   - run: |
+  #         flutter pub get
+  #         flutter clean
+  #         flutter build ios --release --no-codesign
+  #   - name: build ios ipa
+  #     run: |
+  #         cd build/ios/iphoneos
+  #         mkdir Payload
+  #         cd Payload
+  #         ln -s ../Runner.app
+  #         cd ..
+  #         zip -r $BUILD_NAME_WITH_VERSION-ios.ipa Payload
+  #   - name: Upload iPA
+  #     uses: actions/upload-artifact@master
+  #     with:
+  #       name: ios-build
+  #       path: build/ios/iphoneos/${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
+  # build_android:
+  #   needs: [build_env]
+  #   name: Build Flutter (Android)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: download custom env
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: custom_env
+  #   - name: apply custom env
+  #     run: |
+  #         cat .custom_env >> $GITHUB_ENV
+  #         rm .custom_env
+  #   - uses: actions/checkout@v2
+  #   - uses: actions/setup-java@v1
+  #     with:
+  #       java-version: '12.x'
+  #   - uses: subosito/flutter-action@v1
+  #     with:
+  #         channel: 'stable'
+  #   - run: flutter pub get
+  #   - name: sign config
+  #     env:
+  #       SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+  #     if: ${{ env.SIGNING_KEY != '' }}
+  #     run: |
+  #         cd android/
+  #         echo "${{ secrets.SIGNING_KEY }}" |base64 -d > signing.jks
+  #         echo "${{ secrets.KEY_PROPERTIES }}" > key.properties
+  #         echo storeFile=signing.jks >> key.properties
+  #   - run: |
+  #         flutter build apk --target-platform android-arm64
+  #         find build/app/outputs/
+  #         mv build/app/outputs/apk/release/*.apk build/$BUILD_NAME_WITH_VERSION-android.apk
+  #   - name: Upload APK
+  #     uses: actions/upload-artifact@master
+  #     with:
+  #       name: android-build
+  #       path: build/${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+  # release:
+  #   needs: [build_env, build_web, build_ios, build_android]
+  #   name: make release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: download custom env
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: custom_env
+  #   - name: apply custom env
+  #     run: |
+  #         cat .custom_env >> $GITHUB_ENV
+  #         rm .custom_env
+  #   - name: download web
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: web-build
+  #   - name: download ios
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: ios-build
+  #   - name: download android
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #         name: android-build
+  #   - name: create release
+  #     id: create_release
+  #     uses: actions/create-release@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       tag_name: ${{ env.BUILD_VERSION }}
+  #       release_name: ${{ env.BUILD_VERSION }}
+  #       body: ${{ github.event.commits[0].message }}
+  #       draft: true
+  #       prerelease: false
+  #   - name: Upload Release Asset web
+  #     uses: actions/upload-release-asset@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       upload_url: ${{ steps.create_release.outputs.upload_url }}
+  #       asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
+  #       asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-web.zip
+  #       asset_content_type: application/zip
+  #   - name: Upload Release Asset ios
+  #     uses: actions/upload-release-asset@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       upload_url: ${{ steps.create_release.outputs.upload_url }}
+  #       asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
+  #       asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-ios.ipa
+  #       asset_content_type: application/zip
+  #   - name: Upload Release Asset android
+  #     uses: actions/upload-release-asset@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       upload_url: ${{ steps.create_release.outputs.upload_url }}
+  #       asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+  #       asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+  #       asset_content_type: application/zip
+  #   - name: public release
+  #     uses: eregon/publish-release@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       release_id: ${{ steps.create_release.outputs.id }}
